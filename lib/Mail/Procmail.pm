@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.22 2003-08-05 11:36:09+02 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.23 2004-09-19 12:29:47+02 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 247
+# Update Count    : 251
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -137,7 +137,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = "1.06";
+$VERSION = "1.07";
 
 use strict;
 use 5.005;
@@ -166,6 +166,8 @@ require Exporter;
 @EXPORT = qw(
 	     pm_init
 	     pm_gethdr
+	     pm_gethdr_raw
+	     pm_body
 	     pm_deliver
 	     pm_reject
 	     pm_resend
@@ -318,6 +320,43 @@ sub pm_gethdr {
 	push (@ret, $val);
     }
     wantarray ? @ret : '';
+}
+
+=head2 pm_gethdr_raw
+
+Like pm_gethdr, but without whitespace cleanup.
+
+=cut
+
+sub pm_gethdr_raw {
+    my ($hdr, $ix) = @_;
+    my @ret;
+    foreach my $val ( $m_head->get($hdr, $ix) ) {
+	last unless defined $val;
+	if ( $debug ) {
+	    $hdr =~ s/-(.)/"-".ucfirst($1)/ge;
+	    warn (ucfirst($hdr), ": ", $val, "\n");
+	}
+	return $val unless wantarray;
+	push (@ret, $val);
+    }
+    wantarray ? @ret : '';
+}
+
+=head2 pm_body
+
+This routine fetches the body of a message, as a reference to an array
+of lines.
+
+Example:
+
+    $body = pm_body();			# ref of lines
+    $body = join("", @{pm_body()});	# as one string
+
+=cut
+
+sub pm_body {
+    $m_obj->body;
 }
 
 =head2 pm_deliver
