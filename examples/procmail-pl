@@ -1,0 +1,419 @@
+#!/usr/bin/perl -w
+my $RCS_Id = '$Id: procmail.pl,v 1.2 2000-08-09 10:23:44+02 johanv Exp $ ';
+
+# Skeleton for Getopt::Long.
+
+# Author          : Johan Vromans
+# Created On      : Tue Aug  8 19:24:52 2000
+# Last Modified By: Johan Vromans CPWR
+# Last Modified On: Wed Aug  9 10:23:31 2000
+# Update Count    : 387
+# Status          : Unknown, Use with caution!
+
+################ Common stuff ################
+
+use strict;
+use 5.005;
+
+#use FindBin;
+#use lib "$FindBin::Bin";
+use lib ($ENV{HOME}."/lib/perl5");
+
+# Package or program libraries, if appropriate.
+# $LIBDIR = $ENV{'LIBDIR'} || '/usr/local/lib/sample';
+# use lib qw($LIBDIR);
+# require 'common.pl';
+
+# Package name.
+my $my_package = 'Sciurix';
+# Program name and version.
+my ($my_name, $my_version) = $RCS_Id =~ /: (.+).pl,v ([\d.]+)/;
+# Tack '*' if it is not checked in into RCS.
+$my_version .= '*' if length('$Locker:  $ ') > 12;
+
+################ Command line parameters ################
+
+use Getopt::Long 2.13;
+
+# Command line options.
+my $verbose = 0;		# verbose processing
+
+# Development options (not shown with -help).
+my $debug = 0;			# debugging
+my $trace = 0;			# trace (show process)
+my $test = 0;			# test mode.
+
+# Log file and log level.
+my $logfile = "stderr";
+my $loglevel = 3;
+
+# Process command line options.
+app_options();
+
+# Post-processing.
+$trace |= ($debug || $test);
+
+################ Presets ################
+
+my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
+
+# The default mailbox for delivery.
+my $default = "/var/spool/mail/".getpwuid($>);
+
+# Save a copy here, just in case.
+my $copy = $ENV{HOME}."/syslog/mail";
+
+# A pattern to break out words in email names.
+my $wordpat = qr/[-a-zA-Z0-9_.]+/;
+my $wordpat_nodot = qr/[-a-zA-Z0-9_]+/;
+
+# Destination for special emails.
+sub incoming { $ENV{HOME}."/Mail/Incoming/".$_[0].".spool" }
+
+# Destination for mailing lists.
+sub maillist { incoming("maillists.".$_[0]) }
+
+# Destination for SPAM.
+sub spambox  { incoming("spam-".$_[0]) }
+
+use Mail::Procmail 0.02;
+
+################ The Process ################
+
+#TESTING open(STDIN,$ENV{HOME}."/tmp/msg1");
+
+# Setup Procmail.
+my $m_obj = pm_init (
+		     logfile   => $logfile,
+		     loglevel  => $loglevel,
+		     verbose   => $verbose,
+		     trace     => $trace,
+		     debug     => $debug,
+		     test      => $test,
+		    );
+
+# Init local values for often used headers.
+my $m_from		    = pm_gethdr("from");
+my $m_to		    = pm_gethdr("to");
+my $m_cc		    = pm_gethdr("cc");
+my $m_subject		    = pm_gethdr("subject");
+my $m_sender		    = pm_gethdr("sender");
+my $m_apparently_to	    = pm_gethdr("apparently-to");
+my $m_resent_to		    = pm_gethdr("resent-to");
+my $m_resent_cc		    = pm_gethdr("resent-cc");
+my $m_resent_from	    = pm_gethdr("resent-from");
+my $m_resent_sender	    = pm_gethdr("resent-sender");
+my $m_apparently_resent_to  = pm_gethdr("apparently-resent-to");
+
+my $m_header                = $m_obj->head->as_string || '';
+my $m_body                  = join("\n", @{$m_obj->body});
+
+my $m_TO                    = join("\n", $m_to, $m_cc, $m_apparently_to,
+		                         $m_resent_to, $m_resent_cc,
+                                         $m_apparently_resent_to);
+my $m_FROM                  = join("\n", $m_from, $m_sender,
+		                         $m_resent_from, $m_resent_sender);
+
+
+# Start logging.
+pm_log(1, "Mail from $m_from");
+pm_log(1, "To: $m_to");
+pm_log(1, "Subject: $m_subject");
+
+# Save a copy just in case.
+pm_deliver($copy, continue => 1);
+
+################ Avoiding mail loops ################
+
+pm_ignore("Double REJECTED")
+  if $m_subject =~ /REJECTED: REJECTED:/;
+
+################ Get rid of spams ################
+
+pm_ignore("Non-ASCII in subject")
+  if $m_subject =~ /[\232-\355]{3}/;
+
+pm_ignore("Bogus address: \@internet.squirrel.nl")
+  if $m_TO =~ /\@internet.squirrel.nl/mi;
+
+################ Dispatching ################
+
+# External mail to xxx@squirrel.nl is delivered to me. Dispatch here.
+# Internal mail to xxx@squirrel.nl is delivered via aliases.
+
+if ( $m_TO =~ /jkensen@/mi ) {
+    # Maybe CC to me?
+    pm_deliver($default, continue => 1)
+      if $m_TO =~ /jv(romans)?@/mi;
+    # Send to Joan.
+    pm_resend("joan");
+}
+
+################ Intercepting ################
+
+pm_deliver($default, continue => 1)
+  if $m_header =~ /getopt(ions|(-|::)?long)/i
+  || $m_body   =~ /getopt(ions|(-|::)?long)/i;
+
+pm_deliver($default)
+  if $m_subject =~ /MODERATE/;
+
+################ Mailing lists ################
+
+if ( $m_sender =~ /owner-($wordpat)@($wordpat)/i
+     || $m_sender =~ /($wordpat)-owner@($wordpat)/i ) {
+    my ($topic, $host) = ($1, $2);
+
+    if ( $host eq "perl.org" ) {
+	$topic = "perl-" . $topic
+	  unless $topic =~ /^perl/;
+    }
+    elsif ( $topic eq "announce" ) {
+	if ( $host eq "htmlscript.com" ) {
+	    $topic = "htmlscript";
+	}
+    }
+
+    pm_deliver(maillist($topic));
+}
+
+for ( pm_gethdr("x-mailing-list"),
+      pm_gethdr("list-post"),
+      pm_gethdr("mailing-list"),
+      pm_gethdr("x-loop"),
+    ) {
+
+    my ($topic, $host);
+
+    if ( ($topic, $host) = /($wordpat)@($wordpat)/i ) {
+
+	if ( $host eq "perl.org" ) {
+	    $topic = "perl-" . $topic
+	      unless $topic =~ /^perl/;
+	    $topic =~ s/-help$//;
+	}
+    }
+
+    pm_deliver(maillist($topic)) if defined $topic;
+}
+
+if ( pm_gethdr("list-id") =~ /<($wordpat_nodot)\./i ) {
+    my $topic = $1;
+    $topic = $1 if $topic =~ /^(ttf2pt1)-(devel|users|announce)/i;
+    pm_deliver(maillist($topic));
+}
+
+###### Miscellaneous
+
+pm_deliver(maillist("emacs-pretesters"))
+  if $m_TO =~ /emacs-pretesters?[@%]/mi
+  || pm_gethdr("sent-via-bcc-to") =~ /^emacs pretesters/i;
+
+pm_deliver(maillist("isdn-news"))
+  if $m_sender =~ /\bisdnnews@/i
+  || $m_TO =~ /isdnnews@/mi;
+
+for ( "isoc-nl", "isoc-leden",
+      "j2ee-interest",
+      "linux-sig", "linuxsig-gov",
+      "cwnl-developers-l",
+      "tex-nl",
+      "bbdb-info", "bbdb-announce",
+      "xwingml-talk",
+    ) {
+    if ( $m_sender =~ /\b$_@/i || $m_TO =~ /\b$_@/mi ) {
+	$_ = "isoc" if lc eq "isoc-leden";
+	$_ = "cwnl-developers" if /^cwnl-developers/i;
+	$_ = "bbdb-info" if /^bbdb-/i;
+	pm_deliver(maillist($_));
+    }
+}
+
+if ( $m_TO =~ /(info|bug-)?vm[@%]/mi 
+     || $m_FROM =~ /(info|bug-)?vm(-request)[@%]/mi ) {
+
+    deliver_continue($default)
+      if $m_subject =~ /^\[announcement\]/i;
+
+    # VM mailing lists catches a lot of SPAM.
+    # Make sure VM is at least mentioned in the body...
+    pm_deliver(maillist("vm"))
+      if $m_body =~ /\bvm\b/i;
+    spam("VM spam");
+}
+
+pm_deliver(incoming("pause"))
+  if $m_FROM =~ /PAUSE.*upload[@%]/mi
+  || $m_TO =~ /cpan-testers\@perl.org/mi;
+
+pm_deliver(maillist("gnu-prog-disc"))
+  if $m_TO =~ /gnu-prog(-disc(uss)?)?[@%]/mi;
+
+pm_deliver(maillist("nllgg-announce"))
+  if $m_TO =~ /announce\@nllgg.nl/mi;
+
+pm_deliver(maillist("nllgg-leden"))
+  if $m_TO =~ /leden\@nllgg.nl/mi
+  || pm_gethdr("Resent-From") =~ /leden\@nllgg.nl/i;
+
+pm_deliver(maillist("tgif"))
+  if $m_TO =~ /kragen-tgif.*[@%]/mi;
+
+pm_deliver($default)
+  if $m_TO =~ /gs-test[@%]/mi;
+
+pm_deliver(maillist("nietroker"))
+  if $m_subject =~ /\[nietroker\]/i;
+
+# Host dependent actions
+if ( $pm_hostname =~ /\.squirrel\.nl/i ) {
+
+    if ( $m_from =~ /\(johan vromans\)/i
+	 && $m_subject =~ /plume updates/i
+	 && $m_TO =~ /jvromans\@squirrel\.nl/mi ) {
+	my $cmd = $ENV{HOME}."/etc/pm_getxfer";
+	pm_pipe_to ($cmd, lockfile => $cmd.".lock");
+    }
+
+    if ( pm_gethdr("x-pgp-remailed-keyid") ) {
+	my $dest = incoming("mail.Compuware");
+        pm_pipe_to ($ENV{HOME}."/bin/pgp-remailed >>".$dest,
+		    lockfile => $dest.".lock");
+    }
+
+    pm_deliver(incoming("Compuware"))
+      if $m_FROM =~ /@.*compuware\.com/i
+	|| $m_TO =~ /@.*compuware\.com/mi;
+
+    pm_deliver($ENV{HOME}."/Mail/AddrChange", continue => 1)
+      if $m_TO =~ m/(jv|johan|johan.vromans|jvromans)
+		    \@
+		    (mh\.nl|((solair1\.)?inter\.)?nl\.net)/xmi;
+}
+
+elsif ( $pm_hostname =~ /\.nl\.compuware\.com/i ) {
+
+    # Forward a copy to home system.
+    remail_pgp()
+      unless pm_gethdr("x-pgp-remailed-keyid");
+}
+
+################ Despamming ################
+
+# Discard mail that is not addressed to or from me.
+
+spam1("Apparently not for me")
+  if $m_apparently_to =~ /<(jv|johan)/i;
+
+my $oldaddr = qr/(jv@|jvromans@|johan|squirrel|cron|newsletter@)/mi;
+spam2("Most likely not for me")
+  unless $m_TO =~ /$oldaddr/m
+  || $m_FROM   =~ /$oldaddr/m;
+
+my $cmd = $ENV{HOME}."/bin/x-despam";
+my $res = pm_pipe_to ($cmd, continue => 1, testalso => 1,
+		      lockfile => $cmd.".lock");
+spam3("Rejected by despam filter, result = ". sprintf("0x%x", $?))
+      if $res && 0xff00;
+
+# It's probably a real message for me.
+pm_deliver($default);
+
+################ Subroutines ################
+
+sub remail_pgp {
+
+    my $keyid = "0x79279709";
+    my $name = "Johan Vromans";
+    my $dest = 'jvromans@squirrel.nl';
+    my $orig = 'johan_vromans@nl.compuware.com';
+
+    # Create a new message.
+    my $head = new Mail::Header;
+    $head->add("From", $m_from || "$name <$orig>");
+    $head->add("To", "$name <$dest>");
+    $head->add("Subject", "Message from Compuware");
+    $head->add("Sender", $orig);
+    $head->add("X-PGP-Remailed-KeyID", $keyid);
+
+    # Run original message through PGP.
+    my $tmp = $TMPDIR."/rm".$$;
+    my $pipe = Mail::Procmail::_new_fh();
+    open ($pipe, "|pgp +batchmode +verbose=0 -eaf >$tmp $keyid")
+      && $m_obj->print($pipe)
+	&& close($pipe);
+
+    unless ( -s $tmp > 200 ) {
+	pm_log(0,"Error remailing message, code = ". sprintf("0x%x",$?));
+	unlink($tmp);
+	return;
+    }
+
+    # Open the encrypted contents.
+    my $cf = Mail::Procmail::_new_fh();
+    unless ( open ($cf, $tmp) ) {
+	pm_log(0,"error remailing message: $!");
+	return;
+    }
+    unlink ($tmp);
+
+    # Create the new message.
+    my $msg = new Mail::Internet ($cf, Header => $head);
+
+    # And send it.
+    $msg->smtpsend;
+}
+
+sub _spam {
+    my ($tag, $reason, %atts) = @_;
+    my $line = (caller(1))[2];
+    pm_log(2, $tag."[$line]: $reason");
+    pm_deliver(spambox($tag), %atts);
+}
+
+sub spam1 { unshift(@_,"spam1"); &_spam }
+sub spam2 { unshift(@_,"spam2"); &_spam }
+sub spam3 { unshift(@_,"spam3"); &_spam }
+
+sub app_options {
+    my $help = 0;		# handled locally
+    my $ident = 0;		# handled locally
+
+    # Process options, if any.
+    # Make sure defaults are set before returning!
+    return unless @ARGV > 0;
+
+    if ( !GetOptions(
+		     'loglevel=i' =>\$loglevel,
+		     'logfile=s' => \$logfile,
+		     'ident'	=> \$ident,
+		     'verbose'	=> \$verbose,
+		     'trace'	=> \$trace,
+		     'test'	=> \$test,
+		     'help|?'	=> \$help,
+		     'debug'	=> \$debug,
+		    ) or $help )
+    {
+	app_usage(2);
+    }
+    app_ident() if $ident;
+}
+
+sub app_ident {
+    print STDERR ("This is $my_package [$my_name $my_version]\n");
+}
+
+sub app_usage {
+    my ($exit) = @_;
+    app_ident();
+    print STDERR <<EndOfUsage;
+Usage: $0 [options] [file ...]
+    -logfile XXX	name of the logfile to use (default is 'STDERR')
+    -loglevel NN	loglevel, default is 3.
+    -help		this message
+    -ident		show identification
+    -verbose		verbose information
+    -test		test, but do not deliver
+EndOfUsage
+    exit $exit if defined $exit && $exit != 0;
+}

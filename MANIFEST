@@ -1,0 +1,6 @@
+lib/Mail/Procmail.pm
+examples/procmail-pl
+Makefile.PL
+MANIFEST
+CHANGES
+README

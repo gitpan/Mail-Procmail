@@ -1,0 +1,12 @@
+Change information for Mail::Procmail.
+
+*** WARNING: THIS IS EXPERIMENTAL SOFTWARE. USE AT YOUR OWN RISK ***
+
+Version 0.02, released Wed Aug  9 10:25:28 CEST 2000
+
+ * Retrofit to Perl 5.005.
+
+Version 0.01, released Tue Aug  8 21:24;59 VEST 2000
+
+ * Initial release for Perl 5.6.
+
