@@ -5,3 +5,7 @@ MANIFEST
 CHANGES
 README
 t/basic.t
+t/basic.dat
+perl-Mail-Procmail.spec
+perl-MailTools.spec
+perl-LockFile-Simple.spec

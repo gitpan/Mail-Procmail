@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.18 2001-03-21 16:50:25+01 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.19 2002-05-08 13:48:56+02 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 228
+# Update Count    : 229
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -137,7 +137,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = "1.02";
+$VERSION = "1.03";
 
 use strict;
 use 5.005;

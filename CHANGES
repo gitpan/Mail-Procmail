@@ -1,6 +1,16 @@
 Change information for Mail::Procmail.
 
-Version 1.02, released March  21, 2001.
+Version 1.03, released May 8, 2002.
+
+ * Make self-test more robust.
+
+ * Provide (experimental) perl-Mail-Procmail.spec to build .rpm for
+   RedHat 7.x. Note that this requires Mail::Internet and
+   LockFile::Simple to be installed as RedHat packages as well. Spec
+   files are provided to build these packages; you know where to get
+   the sources...
+
+Version 1.02, released March 21, 2001.
 
  * Just some small typos.
 

@@ -86,8 +86,8 @@ Mail::Procmail applications.
 
 Requirements
 ------------
-* Mail::Internet
-* LockFile::Simple
+* Mail::Internet  1.33 (part of the MailTools package, version 1.15)
+* LockFile::Simple  0.2.5
 
 License
 -------
