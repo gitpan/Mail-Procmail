@@ -1,6 +1,10 @@
 Change information for Mail::Procmail.
 
-*** WARNING: THIS IS BETA SOFTWARE. USE AT YOUR OWN RISK ***
+Version 1.0
+
+ * First 'official' release after several months of testing.
+
+ * pm_pipe_to: Fix catching of broken pipe errors.
 
 Version 0.91
 

@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.10 2000-12-13 19:26:31+01 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.14 2001-01-17 17:06:32+01 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 217
+# Update Count    : 223
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -67,7 +67,7 @@ stick in a F<.forward> or F<.procmailrc> file, or similar.
 =head1 DIFFERENCES WITH MAIL::AUDIT
 
 Note that several changes are due to personal preferences and do not
-necessarily imply defiencies in C<Mail::Audit>.
+necessarily imply deficiencies in C<Mail::Audit>.
 
 =over
 
@@ -79,7 +79,7 @@ single message. All (relevant) functions are exported.
 =item Delivery
 
 Each of the delivery methods is able to continue (except
-I<reject> and I<ignore>).
+I<pm_reject> and I<pm_ignore>).
 
 Each of the delivery methods is able to pretend they did it
 (for testing a new filter).
@@ -94,9 +94,9 @@ Message IDs can be checked to suppress duplicate messages.
 
 System commands can be executed for their side-effects.
 
-I<ignore> logs a reason as well.
+I<pm_ignore> logs a reason as well.
 
-I<reject> will fake a "No such user" status to the mail transfer agent.
+I<pm_reject> will fake a "No such user" status to the mail transfer agent.
 
 =item Logging
 
@@ -113,9 +113,9 @@ A log reporting tool is included.
 
 Exit with TEMPFAIL instead of die in case of problems.
 
-I<pipe> ignores  SIGPIPE.
+I<pm_pipe_to> ignores  SIGPIPE.
 
-I<pipe> returns the command exit status if continuation is selected.
+I<pm_pipe_to> returns the command exit status if continuation is selected.
 
 Commands and pipes can be protected  against concurrent access using
 lockfiles.
@@ -137,7 +137,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = 0.91;		# beta 1
+$VERSION = "1.00";
 
 use strict;
 use 5.005;
@@ -421,7 +421,8 @@ Upon completion, the lock file will be removed.
 continue
 
 If true, processing will continue after delivery. Otherwise the
-program will exit with a DELIVERED status.
+program will exit with a DELIVERED status, I<even when the command
+failed>.
 
 =item *
 
@@ -453,6 +454,7 @@ sub pm_pipe_to {
     } unless $test && !$atts{testalso};
 
     pm_unlockfile($lock);
+    $ret = 0 if $ret < 0;	# broken pipe
     pm_log (2, "pipe_to[$line]: command result = ".
 	    (defined $ret ? sprintf("0x%x", $ret) : "undef").
 	    ($! ? ", \$! = $!" : "").

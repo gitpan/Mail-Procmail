@@ -21,7 +21,7 @@ sub maillist { incoming("maillists.".$_[0]) }
 # Destination for SPAM.
 sub spambox  { incoming("spam.".$_[0]) }
 
-use Mail::Procmail 0.03;
+use Mail::Procmail;
 
 ################ The Process ################
 
