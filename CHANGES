@@ -1,6 +1,16 @@
 Change information for Mail::Procmail.
 
-*** WARNING: THIS IS EXPERIMENTAL SOFTWARE. USE AT YOUR OWN RISK ***
+*** WARNING: THIS IS BETA SOFTWARE. USE AT YOUR OWN RISK ***
+
+Version 0.91
+
+ * Starting Beta phase.
+ * Allow pm_gethdr to be called in array context, to deliver all
+   occurrences of a header.
+   Also, allow an optional 2nd argument, to select a specific occurrence.
+ * Add pm_dupcheck to check for duplicate message IDs.
+ * Correct call to gethdr in pm_deliver, in the case of maildir
+   delivery. It should have been pm_gethdr.
 
 Version 0.04, released Sun Aug 27 19:47:42 CEST 2000
 

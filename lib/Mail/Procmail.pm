@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.8 2000-08-27 19:46:22+02 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.10 2000-12-13 19:26:31+01 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 189
+# Update Count    : 217
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -90,6 +90,8 @@ dependent.
 Each of the delivery methods logs the line number in the calling
 program so one can deduce which 'rule' caused the delivery.
 
+Message IDs can be checked to suppress duplicate messages.
+
 System commands can be executed for their side-effects.
 
 I<ignore> logs a reason as well.
@@ -135,7 +137,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = 0.04;
+$VERSION = 0.91;		# beta 1
 
 use strict;
 use 5.005;
@@ -281,14 +283,17 @@ The header is reported using warn() if the debug attribute was passed
 
 Example:
 
-    $m_to = pm_gethdr("to");
+    $m_rcvd = pm_gethdr("received");	# get first (or only) Received: header
+    $m_rcvd = pm_gethdr("received",2);	# get 3rd Received: header
+    @m_rcvd = pm_gethdr("received");	# get all Received: headers
 
 =cut
 
 sub pm_gethdr {
-    my $hdr = shift;
-    my $val = $m_head->get($hdr);
-    if ( $val ) {
+    my ($hdr, $ix) = @_;
+    my @ret;
+    foreach my $val ( $m_head->get($hdr, $ix) ) {
+	last unless defined $val;
 	for ( $val ) {
 	    s/^\s+//;
 	    s/\s+$//;
@@ -299,8 +304,10 @@ sub pm_gethdr {
 	    $hdr =~ s/-(.)/"-".ucfirst($1)/ge;
 	    warn (ucfirst($hdr), ": ", $val, "\n");
 	}
+	return $val unless wantarray;
+	push (@ret, $val);
     }
-    $val || '';
+    wantarray ? @ret : '';
 }
 
 =head2 pm_deliver
@@ -343,7 +350,7 @@ sub pm_deliver {
 
 	# since mutt won't add a lines tag to maildir messages,
 	# we'll add it here
-	unless ( gethdr("lines") ) {
+	unless ( pm_gethdr("lines") ) {
 	    my $body = $m_obj->body;
 	    my $num_lines = @$body;
 	    $m_head->add("Lines", $num_lines);
@@ -447,7 +454,9 @@ sub pm_pipe_to {
 
     pm_unlockfile($lock);
     pm_log (2, "pipe_to[$line]: command result = ".
-	    (defined $ret ? sprintf("0x%x", $ret) : "undef"))
+	    (defined $ret ? sprintf("0x%x", $ret) : "undef").
+	    ($! ? ", \$! = $!" : "").
+	    ($@ ? ", \$@ = $@" : ""))
       unless defined $ret && $ret == 0;
     return $ret if $atts{continue};
     exit DELIVERED;
@@ -571,6 +580,81 @@ sub pm_ignore {
     my $line = (caller(0))[2];
     pm_log(2, "ignore[$line]: $reason");
     exit DELIVERED;
+}
+
+=head2 pm_dupcheck
+
+Check for duplicate messages. Reject the message if its message ID has
+already been received.
+
+Example:
+
+    pm_dupcheck(pm_gethdr("msg-id"));
+
+Attributes:
+
+=over
+
+=item *
+
+dbm
+
+The name of a DBM file (created if necessary) to store the message IDs.
+The default name is C<.msgids> in the HOME directory.
+
+=item *
+
+retain
+
+The amount of time, in days, that subsequent identical message IDs are
+considered duplicates. Each new occurrence will refresh the time stamp.
+The default value is 14 days.
+
+=item *
+
+continue
+
+If true, the routine will return true or false depending on the
+message ID being duplicate. Otherwise, if it was duplicate, the
+program will exit with a DELIVERED status.
+
+=back
+
+I<Warning: In the current implementation, the DBM file will grow
+unlimited. A separate tool will be supplied to expire old message IDs.>
+
+=cut
+
+sub pm_dupcheck {
+    my ($msgid) = shift;
+    my (%atts) = (dbm => $ENV{HOME}."/.msgids",
+		  retain => 14,
+		  @_);
+    my $dbm = $atts{dbm};
+
+    my %msgid;
+    my $dup = 0;
+    if ( dbmopen(%msgid, $dbm, 0660) ) {
+	my $tmp;
+	if ( defined($tmp = $msgid{$msgid}) ) {
+	    if ( ($msgid{$msgid} = time) - $tmp < $atts{retain}*24*60*60 ) {
+		my $line = (caller(0))[2];
+		pm_log(2, "dup[$line]: $msgid");
+		$dup++;
+	    }
+	}
+	else {
+	    $msgid{$msgid} = time;
+	}
+	dbmclose(%msgid)
+	  or pm_log(0, "Error closing $dbm: $!");
+    }
+    else {
+	pm_log(0, "Error opening $dbm: $!");
+    }
+    exit DELIVERED
+      if $dup && !$atts{continue};
+    $dup;
 }
 
 =head2 pm_lockfile
