@@ -1,6 +1,15 @@
 Change information for Mail::Procmail.
 
-Version 1.0
+Version 1.02, released March  21, 2001.
+
+ * Just some small typos.
+
+Version 1.01, released January 24, 2001.
+
+ * Explicitly seek to the end of the file when doing a mailbox
+   delivery. This seems to be necessary for some older systems.
+
+Version 1.0, released January 17, 2001.
 
  * First 'official' release after several months of testing.
 

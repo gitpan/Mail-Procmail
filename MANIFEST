@@ -4,3 +4,4 @@ Makefile.PL
 MANIFEST
 CHANGES
 README
+t/basic.t
