@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.4 2000-08-09 10:58:16+02 johanv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.7 2000-08-11 15:43:07+02 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
-# Last Modified By: Johan Vromans CPWR
+# Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 116
+# Update Count    : 172
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -15,48 +15,108 @@ Mail::Procmail - Procmail-like facility for creating easy mail filters.
 
     use Mail::Procmail;
 
-    my $m_obj = pm_init (
-			 logfile   => "/tmp/pm.log",
-			 loglevel  => 3
-			);
+    # Set up. Log everything up to log level 3.
+    my $m_obj = pm_init ( loglevel  => 3 );
 
+    # Pre-fetch some interesting headers.
     my $m_from		    = pm_gethdr("from");
     my $m_to		    = pm_gethdr("to");
-    my $m_subject		    = pm_gethdr("subject");
+    my $m_subject	    = pm_gethdr("subject");
 
-    my $default = "/var/spool/mail/".$ENV{USER};
+    # Default mailbox.
+    my $default = "/var/spool/mail/".getpwuid($>);
 
-    # Start logging.
     pm_log(1, "Mail from $m_from");
-    pm_log(1, "To: $m_to");
-    pm_log(1, "Subject: $m_subject");
-
-    # Save a copy just in case.
-    pm_deliver("/tmp/savemail", continue => 1);
 
     pm_ignore("Non-ASCII in subject")
       if $m_subject =~ /[\232-\355]{3}/;
 
-    pm_resend("joan")
-      if $m_to =~ /jk@/i;
+    pm_resend("jojan")
+      if $m_to =~ /jjk@/i;
 
+    # Make sure I see these.
     pm_deliver($default, continue => 1)
       if $m_subject =~ /getopt(ions|(-|::)?long)/i;
 
     # And so on ...
 
+    # Final delivery.
+    pm_deliver($default);
+
 =head1 DESCRIPTION
 
-F<procmail> is nasty. It has a tortuous and complicated recipe format,
-and I don't like it. I wanted something flexible whereby I could
-filter my mail using Perl tests.
+F<procmail> is a great mail filter program, but it has weird recipe
+format. It's pattern matching capabilities are basic and often
+insufficient. I wanted something flexible whereby I could filter my
+mail using the power of Perl.
 
-C<Mail::Procmail> is inspired by Simon Cozen's C<Mail::Audit> that was
-inspired by Tom Christiansen's F<audit_mail> and F<deliverlib>
-programs. It allows a piece of email to be logged, examined, accepted
-into a mailbox, filtered, resent elsewhere, rejected, and so on. It's
-designed to allow you to easily create filter programs to stick in a
-F<.forward> file or similar.
+I've been considering to write a procmail replacement in Perl for a
+while, but it was Simon Cozen's C<Mail::Audit> module, and his article
+in The Perl Journal #18, that set it off.
+
+I first started using Simon's great module, and then decided to write
+my own since I liked certain things to be done differently. And I
+couldn't wait for his updates. Currently, Simon and I are in the
+process of considering to port my enhancements to his code as well.
+
+C<Mail::Procmail> allows a piece of email to be logged, examined,
+delivered into a mailbox, filtered, resent elsewhere, rejected, and so
+on. It is designed to allow you to easily create filter programs to
+stick in a F<.forward> or F<.procmailrc> file, or similar.
+
+=head1 DIFFERENCES WITH MAIL::AUDIT
+
+Note that several changes are due to personal preferences and do not
+necessarily imply defiencies in C<Mail::Audit>.
+
+=over
+
+=item General
+
+Not object oriented. Procmail functionality typically involves one
+single message. All (relevant) functions are exported.
+
+=item Delivery
+
+Each of the delivery methods is able to continue (except
+I<reject> and I<ignore>).
+
+Each of the delivery methods is able to pretend they did it
+(for testing a new filter).
+
+No default file argument for mailbox delivery, since this is system
+dependent.
+
+Each of the delivery methods logs the line number in the calling
+program so one can deduce which 'rule' caused the delivery.
+
+System commands can be executed for their side-effects.
+
+I<ignore> logs a reason as well.
+
+I<reject> will fake a "No such user" status to the mail transfer agent.
+
+=item Logging
+
+The logger function is exported as well. Logging is possible to
+a named file, STDOUT or STDERR.
+
+Since several deliveries can take place in parallel, logging is
+protected against concurrent access, and a timestamp/pid is included
+in log messages.
+
+=item Robustness
+
+Exit with TEMPFAIL instead of die in case of problems.
+
+I<pipe> ignores  SIGPIPE.
+
+I<pipe> returns the command exit status if continuation is selected.
+
+Commands and pipes can be protected  against concurrent access using
+lockfiles.
+
+=back
 
 =head1 EXPORTED ROUTINES
 
@@ -73,7 +133,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = 0.02;
+$VERSION = 0.03;
 
 use strict;
 use 5.005;
@@ -89,7 +149,7 @@ my $loglevel;			# log level
 
 use Fcntl qw(:DEFAULT :flock);
 
-use constant REJECTED	=> 100;
+use constant REJECTED	=> 67;	# fake "no such user"
 use constant TEMPFAIL	=> 75;
 use constant DELIVERED	=> 0;
 
@@ -106,6 +166,7 @@ require Exporter;
 	     pm_reject
 	     pm_resend
 	     pm_pipe_to
+	     pm_command
 	     pm_ignore
 	     pm_lockfile
 	     pm_unlockfile
@@ -142,6 +203,9 @@ logfile
 The name of a file to log messages to. Each message will have a timestamp
 attached.
 
+The attribute may be 'STDOUT' or 'STDERR' to achieve logging to
+standard output or error respectively.
+
 =item *
 
 loglevel
@@ -153,6 +217,7 @@ The amount of information that will be logged.
 test
 
 If true, no actual delivery will be done. Suitable to test a new setup.
+Note that file locks are done, so lockfiles may be created and deleted.
 
 =item *
 
@@ -208,9 +273,12 @@ sub pm_init {
 This routine fetches the contents of a header. The result will have
 excess whitepace tidied up.
 
+The header is reported using warn() if the debug attribute was passed
+(with a true value) to pm_init();
+
 Example:
 
-    $m_to = gethdr("to");
+    $m_to = pm_gethdr("to");
 
 =cut
 
@@ -241,7 +309,7 @@ exclusive access.
 
 Example:
 
-    pm_deliver("/var/spool/mail/".$ENV{USER});
+    pm_deliver("/var/spool/mail/".getpwuid($>));
 
 Attributes:
 
@@ -262,10 +330,6 @@ sub pm_deliver {
     my ($target, %atts) = @_;
     my $line = (caller(0))[2];
     pm_log(2, "deliver[$line]: $target");
-    if ( $test ) {
-	exit DELIVERED unless $atts{continue};
-	return;
-    }
 
     # Is it a Maildir?
     if ( -d "$target/tmp" && -d "$target/new" ) {
@@ -290,9 +354,11 @@ sub pm_deliver {
 	print $tmp ($m_obj->as_mbox_string);
 	close($tmp);
 
-	unless (link($tmp_path, $new_path) ) {
-	    pm_log(0,"Couldn't link $tmp_path to $new_path : $!");
-	    exit TEMPFAIL;
+	unless ( $test ) {
+	    unless (link($tmp_path, $new_path) ) {
+		pm_log(0,"Couldn't link $tmp_path to $new_path : $!");
+		exit TEMPFAIL;
+	    }
 	}
 	unlink($tmp_path) or pm_log(1,"Couldn't unlink $tmp_path: $!");
     }
@@ -305,7 +371,7 @@ sub pm_deliver {
 	}
 	flock($fh, LOCK_EX)
 	    or pm_log(1,"Couldn't get exclusive lock on $target");
-	print $fh ($m_obj->as_mbox_string);
+	print $fh ($m_obj->as_mbox_string) unless $test;
 	flock($fh, LOCK_UN)
 	    or pm_log(1,"Couldn't unlock on $target");
 	close($fh);
@@ -318,11 +384,15 @@ sub pm_deliver {
 
 This routine performs delivery to a command via a pipe.
 
+Return the command exit status if the continue attribute is supplied.
+If execution is skipped due to test mode, the return value will be 0.
+See also attribute C<testalso> below.
+
 If the name of a lockfile is supplied, multiple deliveries are throttled.
 
 Example:
 
-    pm_pipe_to("|procmail", lockfile => "/tmp/pm.lock");
+    pm_pipe_to("my_filter", lockfile => "/tmp/pm.lock");
 
 Attributes:
 
@@ -358,24 +428,76 @@ sub pm_pipe_to {
     my $line = (caller(0))[2];
     pm_log(2, "pipe_to[$line]: $target");
 
-    if ( $test && !$atts{testalso} ) {
-	exit DELIVERED unless $atts{continue};
-	return;
-    }
     my $lock;
     my $lockfile = $atts{lockfile};
     $lock = pm_lockfile($lockfile) if $lockfile;
     local ($SIG{PIPE}) = 'IGNORE';
+    my $ret = 0;
     eval {
+	$ret = undef;
 	my $pipe = _new_fh();
 	open ($pipe, "|".$target)
 	  && $m_obj->print($pipe)
 	    && close ($pipe);
-    };
+	$ret = $?;
+    } unless $test && !$atts{testalso};
+
     pm_unlockfile($lock);
-    printf STDERR ("command result = 0x%x\n", $?) if $? && $debug;
-    exit DELIVERED unless $atts{continue};
-    $?;
+    pm_log (2, "pipe_to[$line]: command result = ".
+	    (defined $ret ? sprintf("0x%x", $ret) : "undef"))
+      unless defined $ret && $ret == 0;
+    return $ret if $atts{continue};
+    exit DELIVERED;
+}
+
+=head2 pm_command
+
+Executes a system command for its side effects.
+
+If the name of a lockfile is supplied, multiple executes are
+throttled. This would be required if the command manipulates external
+data in an otherwise unprotected manner.
+
+Example:
+
+    pm_command("grep foo some.dat > /tmp/pm.dat",
+               lockfile => "/tmp/pm.dat.lock");
+
+Attributes:
+
+=over
+
+=item *
+
+lockfile
+
+The name of a file that is used to guard against multiple executions.
+The program will try to exclusively create this file before proceding.
+Upon completion, the lock file will be removed.
+
+testalso
+
+Do this, even in test mode.
+
+=back
+
+=cut
+
+sub pm_command {
+    my ($target, %atts) = @_;
+    my $line = (caller(0))[2];
+    pm_log(2, "command[$line]: $target");
+
+    my $lock;
+    my $lockfile = $atts{lockfile};
+    $lock = pm_lockfile($lockfile) if $lockfile;
+    my $ret = 0;
+    $ret = system($target) unless $atts{testalso};
+    pm_unlockfile($lock);
+    pm_log (2, "pipe_to[$line]: command result = ".
+	    (defined $ret ? sprintf("0x%x", $ret) : "undef"))
+      unless defined $ret && $ret == 0;
+    $ret;
 }
 
 =head2 pm_resend
@@ -405,18 +527,14 @@ sub pm_resend {
     my ($target, %atts) = @_;
     my $line = (caller(0))[2];
     pm_log(2, "resend[$line]: $target");
-    if ( $test ) {
-	exit DELIVERED unless $atts{continue};
-	return;
-    }
-    $m_obj->smtpsend(To => $target);
+    $m_obj->smtpsend(To => $target) unless $test;
     exit DELIVERED unless $atts{continue};
 }
 
 =head2 pm_reject
 
 Reject a message. The sender will get a mail back with the reason for
-the rejection.
+the rejection (unless stderr has been redirected).
 
 Example:
 
@@ -428,6 +546,7 @@ sub pm_reject {
     my $reason = shift;
     my $line = (caller(0))[2];
     pm_log(2, "reject[$line]: $reason");
+    print STDERR ($reason, "\n") unless lc $logfile eq 'stderr';
     exit REJECTED;
 }
 
@@ -511,6 +630,7 @@ my $logfh;
 sub pm_log {
     return unless $logfile;
     return if shift > $loglevel;
+
     # Use sysopen/syswrite for atomicity.
     unless ( $logfh ) {
 	$logfh = _new_fh();
@@ -527,9 +647,9 @@ sub pm_log {
 	}
     }
     my @tm = localtime;
-    my $msg = sprintf ("%04d/%02d/%02d %02d:%02d:%02d %s\n",
+    my $msg = sprintf ("%04d%02d%02d%02d%02d%02d.%05d %s\n",
 		       $tm[5]+1900, $tm[4]+1, $tm[3], $tm[2], $tm[1], $tm[0],
-		       "@_");
+		       $$, "@_");
     print STDERR ($msg) if $debug;
     syswrite ($logfh, $msg);
 }
@@ -540,212 +660,31 @@ sub _new_fh {
     IO::File->new();
 }
 
+=head1 USING WITH PROCMAIL
+
+The following lines at the start of .procmailrc will cause a copy of
+each incoming message to be saved in $HOME/syslog/mail, after which
+the procmail-pl is run as a TRAP program (see the procmailrc
+documentation). As a result, procmail will transfer the exit status of
+procmail-pl to the mail transfer agent that invoked procmail (e.g.,
+sendmail, or postfix).
+
+    LOGFILE=$HOME/syslog/procmail
+    VERBOSE=off
+    LOGABSTRACT=off
+    EXITCODE=
+    TRAP=$HOME/bin/procmail-pl
+
+    :0:
+    $HOME/syslog/mail
+
+The original contents of the .procmailrc can be safely left in place
+after these lines.
+
 =head1 EXAMPLE
 
-A live example from my personal mail filter.
-
-    # Log file and log level.
-    my $logfile = "test.log";
-    my $loglevel = 3;
-
-    # The default mailbox for delivery.
-    my $default = "/var/spool/mail/".$ENV{USER};
-
-    # Save a copy here, just in case.
-    my $copy = $ENV{HOME}."/syslog/mail";
-
-    # A pattern to break out words in email names.
-    my $wordpat = qr/[-a-zA-Z0-9_.]+/;
-
-    # Destination for special emails.
-    sub incoming { $ENV{HOME}."/Mail/Incoming/".$_[0].".spool" }
-
-    # Destination for mailing lists.
-    sub maillist { incoming("maillists.".$_[0]) }
-
-    # Destination for SPAM.
-    my $spam = incoming("spam");
-
-    use Mail::Procmail;
-
-    # Setup Procmail.
-    my $m_obj = pm_init (
-			 logfile   => $logfile,
-			 loglevel  => $loglevel,
-			);
-
-    # Init local values for often used headers.
-    my $m_from		    = pm_gethdr("from");
-    my $m_to		    = pm_gethdr("to");
-    my $m_cc		    = pm_gethdr("cc");
-    my $m_subject	    = pm_gethdr("subject");
-    my $m_sender	    = pm_gethdr("sender");
-    my $m_apparently_to	    = pm_gethdr("apparently-to");
-    my $m_resent_to	    = pm_gethdr("resent-to");
-    my $m_resent_cc	    = pm_gethdr("resent-cc");
-    my $m_resent_from	    = pm_gethdr("resent-from");
-    my $m_resent_sender	    = pm_gethdr("resent-sender");
-    my $m_apparently_resent_to  = pm_gethdr("apparently-resent-to");
-
-    my $m_header            = $m_obj->head->as_string || '';
-    my $m_body              = join("\n", @{$m_obj->body});
-
-    my $m_TO                = join("\n", $m_to, $m_cc, $m_apparently_to,
-				     $m_resent_to, $m_resent_cc,
-				     $m_apparently_resent_to);
-    my $m_FROM              = join("\n", $m_from, $m_sender,
-				     $m_resent_from, $m_resent_sender);
-
-    # Start logging.
-    pm_log(1, "Mail from $m_from");
-    pm_log(1, "To: $m_to");
-    pm_log(1, "Subject: $m_subject");
-
-    # Save a copy just in case.
-    pm_deliver($copy, continue => 1);
-
-    ################ Get rid of spams ################
-
-    pm_ignore("Non-ASCII in subject")
-      if $m_subject =~ /[\232-\355]{3}/;
-
-    pm_ignore("Bogus address: \@internet.squirrel.nl")
-      if $m_TO =~ /\@internet.squirrel.nl/mi;
-
-    ################ Dispatching ################
-
-    # External mail to xxx@squirrel.nl is delivered to me. Dispatch here.
-    # Internal mail to xxx@squirrel.nl is delivered via aliases.
-
-    if ( $m_TO =~ /jkensen@/mi ) {
-	# Maybe CC to me?
-	pm_deliver($default, continue => 1)
-	  if $m_TO =~ /jv(romans)?@/mi;
-	# Send to Joan.
-	pm_resend("joan");
-    }
-
-    ################ Intercepting ################
-
-    pm_deliver($default, continue => 1)
-      if $m_header =~ /getopt(ions|(-|::)?long)/i
-      || $m_body   =~ /getopt(ions|(-|::)?long)/i;
-
-    pm_deliver($default)
-      if $m_subject =~ /MODERATE/;
-
-    ################ Mailing lists ################
-
-    if ( $m_sender =~ /owner-($wordpat)@($wordpat)/i ) {
-	my ($topic, $host) = ($1, $2);
-
-	if ( $host eq "perl.org" ) {
-	    $topic = "perl-" . $topic
-	      unless $topic =~ /^perl/;
-	}
-	elsif ( $topic eq "announce" ) {
-	    if ( $host eq "htmlscript.com" ) {
-		$topic = "htmlscript";
-	    }
-	}
-
-	pm_deliver(maillist($topic));
-    }
-
-    for ( pm_gethdr("x-mailing-list"),
-	  pm_gethdr("list-post"),
-	  pm_gethdr("mailing-list") ) {
-
-	my ($topic, $host);
-
-	if ( ($topic, $host) = /($wordpat)@($wordpat)/i ) {
-
-	    if ( $host eq "perl.org" ) {
-		$topic = "perl-" . $topic
-		  unless $topic =~ /^perl/;
-		$topic =~ s/-help$//;
-	    }
-	}
-
-	pm_deliver(maillist($topic)) if defined $topic;
-    }
-
-    ###### Miscellaneous
-
-    pm_deliver(maillist("perl-xml"))
-      if pm_gethdr("x-listname") =~ /perl-xml/i
-      || pm_gethdr("list-id") =~ /<perl-xml\./i;
-
-    pm_deliver(maillist("perlpoint"))
-      if $m_TO =~ /perlpoint@/mi;
-
-    pm_deliver(maillist("perl-friends"))
-      if pm_gethdr("x-loop") =~ /^perl-friends/i;
-
-    if ( $m_TO =~ /(info|bug-)?vm[@%]/mi ) {
-	deliver_continue($default)
-	  if $m_subject =~ /^\[announcement\]/i;
-
-	# VM mailing lists catches a lot of SPAM.
-	# Make sure VM is at least mentioned in the body...
-	pm_deliver(maillist("vm"))
-	  if $m_body =~ /\bvm\b/i;
-	spam("VM spam");
-    }
-
-    pm_deliver(incoming("pause"))
-      if $m_FROM =~ /PAUSE.*upload[@%]/mi
-      || $m_TO =~ /cpan-testers\@perl.org/mi;
-
-    pm_deliver(maillist("ttf2pt1"))
-      if pm_gethdr("list-id") =~ /ttf2pt1-(users|announce|devel)\./i;
-
-    # $pm_hostname is exported by Mail::Procmail and can be used
-    # for system-dependent filtering.
-    if ( $pm_hostname eq "phoenix.squirrel.nl" ) {
-	if ( $m_from =~ /\(johan vromans\)/i
-	     && $m_subject =~ /plume updates/i
-	     && $m_TO =~ /jvromans\@squirrel\.nl/mi ) {
-	    my $cmd = $ENV{HOME}."/etc/pm_getxfer";
-	    pm_pipe_to ($cmd, lockfile => $cmd.".lock");
-	}
-
-    }
-
-    ################ Despamming ################
-
-    # Discard mail that is not addressed to or from me.
-
-    spam("Not for me")
-      if $m_apparently_to =~ /<(jv|johan)/i;
-
-    spam("Not for me")
-      unless $m_TO =~ /(jv@|jvromans@|johan|squirrel|cron|newsletter@)/mi
-      || $m_FROM   =~ /(jv@|jvromans@|johan|squirrel|cron|newsletter@)/mi;
-
-    # Run separate despam filter.
-    my $lock = pm_lockfile($ENV{HOME}."/bin/x-despam.lock");
-    eval {
-	my $pipe;
-	open ($pipe, "|".$ENV{HOME}."/bin/x-despam")
-	  && $m_obj->print($pipe)
-	    && close ($pipe);
-	pm_unlockfile($lock);
-	printf STDERR ("command result = 0x%x\n", $?) if $? && $debug;
-	spam("Rejected by despam filter, result = ". sprintf("0x%x", $?))
-	  if $? && 0xff00;
-    };
-    pm_unlockfile($lock);
-
-    # If we get here, it's good mail.
-    pm_deliver($default);
-
-    sub spam {
-	my ($reason, %atts) = @_;
-	my $line = (caller(0))[2];
-	pm_log(2, "spam[$line]: $reason");
-	pm_deliver($spam, %atts);
-    }
+An extensive example can be found in the examples directory of the
+C<Mail::Procmail> kit.
 
 =head1 SEE ALSO
 
@@ -760,8 +699,8 @@ procmail documentation.
 Johan Vromans, Squirrel Consultancy <jvromans@squirrel.nl>
 
 Some parts are shamelessly stolen from Mail::Audit by Simon Cozens
-<simon@cpan.org>, who admitted that he stole most of it from Tom
-Christiansen.
+<simon@cpan.org>, who admitted that he stole most of it from programs
+by Tom Christiansen.
 
 =head1 COPYRIGHT and DISCLAIMER
 
@@ -782,3 +721,7 @@ GNU General Public License or the Artistic License for more details.
 =cut
 
 1;
+
+# Local Variables:
+# compile-command: "perl -wc Procmail.pm && install -m 0555 Procmail.pm $HOME/lib/perl5/Mail/Procmail.pm"
+# End:

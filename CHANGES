@@ -2,6 +2,12 @@ Change information for Mail::Procmail.
 
 *** WARNING: THIS IS EXPERIMENTAL SOFTWARE. USE AT YOUR OWN RISK ***
 
+Version 0.03, released Fri Aug 11 15:45:29 CEST 2000
+
+ * Add pm_command routine.
+ * Enhance documentation.
+ * Strip examples.
+
 Version 0.02, released Wed Aug  9 10:25:28 CEST 2000
 
  * Retrofit to Perl 5.005.

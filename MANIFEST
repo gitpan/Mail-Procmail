@@ -1,5 +1,5 @@
 lib/Mail/Procmail.pm
-examples/procmail-pl
+examples/filter.pl
 Makefile.PL
 MANIFEST
 CHANGES
