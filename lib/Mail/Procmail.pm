@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.21 2003-04-23 19:17:49+02 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.22 2003-08-05 11:36:09+02 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 243
+# Update Count    : 247
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -137,7 +137,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = "1.05";
+$VERSION = "1.06";
 
 use strict;
 use 5.005;
@@ -204,6 +204,12 @@ Attributes:
 
 =item *
 
+fh
+
+An open file handle to read the message from. Defaults to STDIN.
+
+=item *
+
 logfile
 
 The name of a file to log messages to. Each message will have a timestamp
@@ -252,6 +258,7 @@ sub pm_init {
     my %atts = (
 		logfile   => '',
 		loglevel  => 0,
+		fh	  => undef,
 		verbose   => 0,
 		trace     => 0,
 		debug     => 0,
@@ -263,12 +270,14 @@ sub pm_init {
     $verbose   = delete $atts{verbose};
     $logfile   = delete $atts{logfile};
     $loglevel  = delete $atts{loglevel};
+    my $fh     = delete $atts{fh} || \*STDIN;
+
     $trace |= ($debug || $test);
 
     croak("Unprocessed attributes: ".join(" ",sort keys %atts))
       if %atts;
 
-    $m_obj = Mail::Internet->new(\*STDIN);
+    $m_obj = Mail::Internet->new($fh);
     $m_head = $m_obj->head;  # Mail::Header
 
     $m_obj;
@@ -598,7 +607,7 @@ already been received.
 
 Example:
 
-    pm_dupcheck(scalar(pm_gethdr("messageg-id")));
+    pm_dupcheck(scalar(pm_gethdr("message-id")));
 
 Attributes:
 

@@ -1,5 +1,12 @@
 Change information for Mail::Procmail.
 
+Version 1.06, released Aug  5, 2003
+
+ * pm_init now takes a 'fh' attribute to have it read the message from
+   that file handle. Thanks to Tom Metro.
+
+ * The self tests now use Test::More.
+
 Version 1.05, released Apr 26, 2003
 
  * The logging messages now include the message size in the log file. 
