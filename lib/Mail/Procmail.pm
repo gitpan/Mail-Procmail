@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.7 2000-08-11 15:43:07+02 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.8 2000-08-27 19:46:22+02 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 172
+# Update Count    : 189
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -105,6 +105,8 @@ Since several deliveries can take place in parallel, logging is
 protected against concurrent access, and a timestamp/pid is included
 in log messages.
 
+A log reporting tool is included.
+
 =item Robustness
 
 Exit with TEMPFAIL instead of die in case of problems.
@@ -133,7 +135,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = 0.03;
+$VERSION = 0.04;
 
 use strict;
 use 5.005;
@@ -171,6 +173,7 @@ require Exporter;
 	     pm_lockfile
 	     pm_unlockfile
 	     pm_log
+	     pm_report
 	     $pm_hostname
 	    );
 
@@ -660,6 +663,112 @@ sub _new_fh {
     IO::File->new();
 }
 
+################ Reporting ################
+
+=head2 pm_report
+
+pm_report() produces a summary report from log files from
+Mail::Procmail applications.
+
+Example:
+
+    pm_report(logfile => "pmlog");
+
+The report shows the deliveries, and the rules that caused the
+deliveries. For example:
+
+  393  393  deliver[203]  /home/jv/Mail/perl5-porters.spool
+  370  370  deliver[203]  /home/jv/Mail/perl6-language.spool
+  174  174  deliver[203]  /home/jv/Mail/perl6-internals.spool
+  160   81  deliver[311]  /var/spool/mail/jv
+	46  deliver[337]
+	23  deliver[363]
+	10  deliver[165]
+
+The first column is the total number of deliveries for this target.
+The second column is the number of deliveries triggered by the
+indicated rule. If more rules apply to a target, this line is followed
+by additional lines with an empty first and last column.
+
+Attributes:
+
+=over
+
+=item *
+
+logfile
+
+The name of the logfile to process.
+
+=back
+
+If no logfile attribute is passed, pm_report() reads all files
+supplied on the command line. This makes it straighforward to run from
+the command line:
+
+    $ perl -MMail::Procmail -e 'pm_report()' syslog/pm_logs/*
+
+=cut
+
+sub pm_report {
+
+    my (%atts) = @_;
+    my $logfile = delete($atts{logfile});
+
+    local (@ARGV) = $logfile ? ($logfile) : @ARGV;
+
+    my %tally;			# master array with data
+    my $max1 = 0;		# max. delivery
+    my $max2 = 0;		# max. delivery / rule
+    my $max3 = 0;		# max length of rules
+    my $recs = 0;		# records in file
+    my $msgs = 0;		# messages
+    my $dlvr = 0;		# deliveries
+
+    while ( <> ) {
+	$recs++;
+
+	# Tally number of incoming messages.
+	$msgs++, next if /^\d+\.\d+ Mail from/;
+
+	# Skip non-deliveries.
+	next unless /^\d+\.\d+ (\w+\[[^\]]+\]):\s+(.+)/;
+	$dlvr++;
+
+	# Update stats and keep track of max values.
+	my $t;
+	$max1 = $t if ($t = ++$tally{$2}->[0]) > $max1;
+	$max2 = $t if ($t = ++$tally{$2}->[1]->{$1}) > $max2;
+	$max3 = $t if ($t = length($1)) > $max3;
+    }
+
+    print STDOUT ("$recs records, $msgs messages, $dlvr deliveries.\n\n");
+
+    # Construct format for report.
+    $max1 = length($max1);
+    $max2 = length($max2);
+    my $fmt = "%${max1}s  %${max2}s  %-${max3}s  %s\n";
+
+    # Sort on number of deliveries per target.
+    foreach my $dest ( sort { $b->[1] <=> $a->[1] }
+		          map { [ $_, $tally{$_}->[0], $tally{$_}->[1] ] }
+			     keys %tally ) {
+	my $first = 1;
+	# Sort on deliveries per rule.
+	foreach my $rule ( sort { $b->[1] <=> $a->[1] }
+			      map { [ $_, $dest->[2]->{$_} ] }
+			         keys %{$dest->[2]} ) {
+	    printf STDOUT ($fmt,
+			   ($first ? $dest->[1] : ""),
+			   $rule->[1],
+			   $rule->[0],
+			   ($first ? $dest->[0] : ""));
+	    $first = 0;
+	}
+    }
+
+}
+
 =head1 USING WITH PROCMAIL
 
 The following lines at the start of .procmailrc will cause a copy of
@@ -723,5 +832,5 @@ GNU General Public License or the Artistic License for more details.
 1;
 
 # Local Variables:
-# compile-command: "perl -wc Procmail.pm && install -m 0555 Procmail.pm $HOME/lib/perl5/Mail/Procmail.pm"
+# compile-command: "perl -wc -Mlib=$HOME/lib/perl5 Procmail.pm && install -m 0555 Procmail.pm $HOME/lib/perl5/Mail/Procmail.pm"
 # End:

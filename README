@@ -2,7 +2,7 @@
 
 Introduction
 ------------
-procmail is one of the most powerfull tools in use on Unix systems to
+procmail is one of the most powerful tools in use on Unix systems to
 filter incoming email. It is, however, rather complicated and
 configuring it can be a pain.
 
@@ -79,6 +79,12 @@ unless the attribute "continue=>1" is passed.
 
 * pm_log(level,message)
   Add a message to the log. A timestamp will be prepended.
+
+Reporting
+---------
+
+A facility is included to produce reports from log files written by
+Mail::Procmail applications.
 
 Requirements
 ------------

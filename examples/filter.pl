@@ -25,6 +25,8 @@ use Mail::Procmail 0.03;
 
 ################ The Process ################
 
+eval { ################ BEGIN PROTECTED EXECUTION ################
+
 # Setup Procmail module.
 my $m_obj = pm_init ( logfile => 'stderr', loglevel => 3 );
 
@@ -179,6 +181,28 @@ spam("Apparently not for me")
 
 # It's probably a real message for me.
 pm_deliver($default);
+
+}; ################ END PROTECTED EXECUTION ################
+
+if ( $@ ) {
+    # Something went seriously wrong...
+    my $msg = $@;
+    $msg =~ s/\n.*//s;
+
+    # Log it using syslog.
+    my ($tool, $facility, $level) = qw(procmail mail crit);
+    require Sys::Syslog;
+    import Sys::Syslog;
+    openlog($tool, "pid,nowait", $facility);
+    syslog($level, "%s", $msg);
+    closelog();
+
+    # Also, log normally.
+    pm_log(0, "FATAL: $msg");
+
+    # Turn it into temporary failure and hope someone notices...
+    exit Mail::Procmail::TEMPFAIL;
+}
 
 ################ Subroutines ################
 

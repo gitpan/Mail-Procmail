@@ -2,6 +2,11 @@ Change information for Mail::Procmail.
 
 *** WARNING: THIS IS EXPERIMENTAL SOFTWARE. USE AT YOUR OWN RISK ***
 
+Version 0.04, released Sun Aug 27 19:47:42 CEST 2000
+
+ * Add pm_report routine to produce summary reports.
+ * Enhance documentation.
+
 Version 0.03, released Fri Aug 11 15:45:29 CEST 2000
 
  * Add pm_command routine.
