@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.20 2003-04-23 13:52:55+02 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.21 2003-04-23 19:17:49+02 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 235
+# Update Count    : 243
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -137,7 +137,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = "1.04";
+$VERSION = "1.05";
 
 use strict;
 use 5.005;
@@ -338,10 +338,14 @@ program will exit with a DELIVERED status.
 
 =cut
 
+sub _pm_msg_size {
+    length($m_obj->head->as_string || '') + length(join("", @{$m_obj->body}));
+}
+
 sub pm_deliver {
     my ($target, %atts) = @_;
     my $line = (caller(0))[2];
-    pm_log(2, "deliver[$line]: $target");
+    pm_log(2, "deliver[$line]: $target "._pm_msg_size());
 
     # Is it a Maildir?
     if ( -d "$target/tmp" && -d "$target/new" ) {
@@ -440,7 +444,7 @@ Do this, even in test mode.
 sub pm_pipe_to {
     my ($target, %atts) = @_;
     my $line = (caller(0))[2];
-    pm_log(2, "pipe_to[$line]: $target");
+    pm_log(2, "pipe_to[$line]: $target "._pm_msg_size());
 
     my $lock;
     my $lockfile = $atts{lockfile};
@@ -503,7 +507,7 @@ Do this, even in test mode.
 sub pm_command {
     my ($target, %atts) = @_;
     my $line = (caller(0))[2];
-    pm_log(2, "command[$line]: $target");
+    pm_log(2, "command[$line]: $target "._pm_msg_size());
 
     my $lock;
     my $lockfile = $atts{lockfile};
@@ -543,7 +547,7 @@ program will exit with a DELIVERED status.
 sub pm_resend {
     my ($target, %atts) = @_;
     my $line = (caller(0))[2];
-    pm_log(2, "resend[$line]: $target");
+    pm_log(2, "resend[$line]: $target "._pm_msg_size());
     $m_obj->smtpsend(To => $target) unless $test;
     exit DELIVERED unless $atts{continue};
 }
@@ -562,7 +566,7 @@ Example:
 sub pm_reject {
     my $reason = shift;
     my $line = (caller(0))[2];
-    pm_log(2, "reject[$line]: $reason");
+    pm_log(2, "reject[$line]: $reason "._pm_msg_size());
     print STDERR ($reason, "\n") unless lc $logfile eq 'stderr';
     exit REJECTED;
 }
@@ -583,7 +587,7 @@ Example:
 sub pm_ignore {
     my $reason = shift;
     my $line = (caller(0))[2];
-    pm_log(2, "ignore[$line]: $reason");
+    pm_log(2, "ignore[$line]: $reason "._pm_msg_size());
     exit DELIVERED;
 }
 
@@ -644,7 +648,7 @@ sub pm_dupcheck {
 	if ( defined($tmp = $msgid{$msgid}) ) {
 	    if ( ($msgid{$msgid} = time) - $tmp < $atts{retain}*24*60*60 ) {
 		my $line = (caller(0))[2];
-		pm_log(2, "dup[$line]: $msgid");
+		pm_log(2, "dup[$line]: $msgid "._pm_msg_size());
 		$dup++;
 	    }
 	}

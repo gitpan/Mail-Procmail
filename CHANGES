@@ -1,5 +1,10 @@
 Change information for Mail::Procmail.
 
+Version 1.05, released Apr 26, 2003
+
+ * The logging messages now include the message size in the log file. 
+   The pm_stats utility reports the sizes in the summary.
+
 Version 1.04, released Apr 24, 2003
 
  * Procmail.pm: Small fixes w.r.t. pm_dupcheck. Thanks to Frederik Eaton.
