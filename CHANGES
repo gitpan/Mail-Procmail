@@ -1,5 +1,9 @@
 Change information for Mail::Procmail.
 
+Version 1.08, released Sep 19, 2004
+
+ * Documentation and example changes.
+
 Version 1.07, released Sep 19, 2004
 
  * Added pm_gethdr_raw, to get headers unprocessed.

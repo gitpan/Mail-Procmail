@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.23 2004-09-19 12:29:47+02 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.24 2004-09-19 12:34:56+02 jv Exp jv $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 251
+# Update Count    : 254
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -56,8 +56,7 @@ in The Perl Journal #18, that set it off.
 
 I first started using Simon's great module, and then decided to write
 my own since I liked certain things to be done differently. And I
-couldn't wait for his updates. Currently, Simon and I are in the
-process of considering to port my enhancements to his code as well.
+couldn't wait for his updates.
 
 C<Mail::Procmail> allows a piece of email to be logged, examined,
 delivered into a mailbox, filtered, resent elsewhere, rejected, and so
@@ -137,7 +136,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = "1.07";
+$VERSION = "1.08";
 
 use strict;
 use 5.005;
@@ -961,7 +960,7 @@ by Tom Christiansen.
 
 =head1 COPYRIGHT and DISCLAIMER
 
-This program is Copyright 2000,2003 by Squirrel Consultancy. All
+This program is Copyright 2000,2004 by Squirrel Consultancy. All
 rights reserved.
 
 This program is free software; you can redistribute it and/or modify

@@ -44,9 +44,9 @@ my $m_resent_sender	    = pm_gethdr("resent-sender");
 my $m_apparently_resent_to  = pm_gethdr("apparently-resent-to");
 
 my $m_header                = $m_obj->head->as_string || '';
-my $m_body                  = join("", @{$m_obj->body});
+my $m_lines		    = pm_body();
+my $m_body                  = join("", @$m_lines);
 my $m_size		    = length($m_body);
-my $m_lines		    = @{$m_obj->body};
 
 # These mimic procmail's TO and FROM patterns.
 my $m_TO   = join("\n", $m_to, $m_cc, $m_apparently_to,
