@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.19 2002-05-08 13:48:56+02 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.20 2003-04-23 13:52:55+02 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 229
+# Update Count    : 235
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -137,7 +137,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = "1.03";
+$VERSION = "1.04";
 
 use strict;
 use 5.005;
@@ -172,6 +172,7 @@ require Exporter;
 	     pm_pipe_to
 	     pm_command
 	     pm_ignore
+	     pm_dupcheck
 	     pm_lockfile
 	     pm_unlockfile
 	     pm_log
@@ -593,7 +594,7 @@ already been received.
 
 Example:
 
-    pm_dupcheck(pm_gethdr("msg-id"));
+    pm_dupcheck(scalar(pm_gethdr("messageg-id")));
 
 Attributes:
 
@@ -875,8 +876,15 @@ sendmail, or postfix).
     :0:
     $HOME/syslog/mail
 
-The original contents of the .procmailrc can be safely left in place
-after these lines.
+B<WARNING>: procmail seems to have problems when $HOME/syslog/mail
+gets too big (over 50Mb). If you want to maintain a huge archive, you
+can specify excess extents, like this:
+
+    :0:
+    $HOME/syslog/mail-ext1
+
+    :0:
+    $HOME/syslog/mail-ext2
 
 =head1 EXAMPLE
 
@@ -901,7 +909,7 @@ by Tom Christiansen.
 
 =head1 COPYRIGHT and DISCLAIMER
 
-This program is Copyright 2000 by Squirrel Consultancy. All
+This program is Copyright 2000,2003 by Squirrel Consultancy. All
 rights reserved.
 
 This program is free software; you can redistribute it and/or modify
