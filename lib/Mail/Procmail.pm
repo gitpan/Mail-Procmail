@@ -1,10 +1,10 @@
-my $RCS_Id = '$Id: Procmail.pm,v 1.16 2001-01-24 14:30:00+01 jv Exp $ ';
+my $RCS_Id = '$Id: Procmail.pm,v 1.14 2001-01-17 17:06:32+01 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Aug  8 13:53:22 2000
 # Last Modified By: Johan Vromans
 # Last Modified On:
-# Update Count    : 226
+# Update Count    : 223
 # Status          : Unknown, Use with caution!
 
 =head1 NAME
@@ -137,7 +137,7 @@ take place.
 
 package Mail::Procmail;
 
-$VERSION = "1.01";
+$VERSION = "1.00";
 
 use strict;
 use 5.005;
@@ -315,8 +315,7 @@ sub pm_gethdr {
 This routine performs delivery to a Unix style mbox file, or maildir.
 
 In case of an mbox file, the file is locked first by acquiring
-exclusive access. Note that older style locking, with a lockfile with
-C<.lock> extension, is I<not> supported.
+exclusive access.
 
 Example:
 
@@ -382,7 +381,6 @@ sub pm_deliver {
 	}
 	flock($fh, LOCK_EX)
 	    or pm_log(1,"Couldn't get exclusive lock on $target");
-	seek($fh, 0, 2);	# make sure we're still at the end
 	print $fh ($m_obj->as_mbox_string) unless $test;
 	flock($fh, LOCK_UN)
 	    or pm_log(1,"Couldn't unlock on $target");
